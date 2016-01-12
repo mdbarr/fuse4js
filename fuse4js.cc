@@ -1,11 +1,11 @@
 /*
- * 
+ *
  * fuse4js.cc
- * 
+ *
  * Copyright (c) 2012 - 2014 by VMware, Inc. All Rights Reserved.
  * http://www.vmware.com
  * Refer to LICENSE.txt for details of distribution and use.
- * 
+ *
  */
 
 /*
@@ -70,7 +70,7 @@ static struct {
   Persistent<Function> GenericFunc;
 } f4js;
 
-enum fuseop_t {  
+enum fuseop_t {
   OP_GETATTR = 0,
   OP_TRUNCATE,
   OP_READDIR,
@@ -157,7 +157,7 @@ static struct {
       off_t offset;
       size_t len;
       char *dstBuf;
-      const char *srcBuf; 
+      const char *srcBuf;
     } rw;
     struct {
       const char *dst;
@@ -186,7 +186,7 @@ static int f4js_rpc(enum fuseop_t op, const char *path)
   f4js_cmd.in_path = path;
   uv_async_send(&f4js.async);
   sem_wait(f4js.psem);
-  return f4js_cmd.retval;  
+  return f4js_cmd.retval;
 }
 
 // ---------------------------------------------------------------------------
@@ -381,7 +381,9 @@ void f4js_destroy (void *data)
 
 void *fuse_thread(void *)
 {
-  struct fuse_operations ops = { 0 };
+  struct fuse_operations ops;
+  memset(&ops, 0, sizeof(ops));
+
   ops.truncate = f4js_truncate;
   ops.getattr = f4js_getattr;
   ops.readdir = f4js_readdir;
@@ -431,7 +433,7 @@ void ConvertDate(Handle<Object> &stat,
     time_t nanoseconds = milliseconds * 1000000.0;
     out->tv_sec = seconds;
     out->tv_nsec = nanoseconds;
-  }  
+  }
 }
 
 
@@ -442,7 +444,7 @@ NAN_METHOD(ProcessReturnValue)
   if (args.Length() >= 1 && args[0]->IsNumber()) {
     Local<Number> retval = Local<Number>::Cast(args[0]);
     f4js_cmd.retval = (int)retval->Value();
-  }  
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -454,13 +456,13 @@ NAN_METHOD(GetAttrCompletion)
   if (f4js_cmd.retval == 0 && args.Length() >= 2 && args[1]->IsObject()) {
     memset(f4js_cmd.u.getattr.stbuf, 0, sizeof(*f4js_cmd.u.getattr.stbuf));
     Handle<Object> stat = Handle<Object>::Cast(args[1]);
-    
+
     Local<Value> prop = stat->Get(NanNew<String>("size"));
     if (!prop->IsUndefined() && prop->IsNumber()) {
       Local<Number> num = Local<Number>::Cast(prop);
       f4js_cmd.u.getattr.stbuf->st_size = (off_t)num->Value();
     }
-    
+
     prop = stat->Get(NanNew<String>("mode"));
     if (!prop->IsUndefined() && prop->IsNumber()) {
       Local<Number> num = Local<Number>::Cast(prop);
@@ -472,7 +474,7 @@ NAN_METHOD(GetAttrCompletion)
       Local<Number> num = Local<Number>::Cast(prop);
       f4js_cmd.u.getattr.stbuf->st_nlink = (mode_t)num->Value();
     }
-    
+
     prop = stat->Get(NanNew<String>("uid"));
     if (!prop->IsUndefined() && prop->IsNumber()) {
       Local<Number> num = Local<Number>::Cast(prop);
@@ -513,11 +515,11 @@ NAN_METHOD(ReadDirCompletion)
       Local<Value> el = ar->Get(i);
       if (!el->IsUndefined() && el->IsString()) {
         Local<String> name = Local<String>::Cast(el);
-        String::Utf8Value av(name);  
+        String::Utf8Value av(name);
         struct stat st;
         memset(&st, 0, sizeof(st)); // structure not used. Zero everything.
         if (f4js_cmd.u.readdir.filler(f4js_cmd.u.readdir.buf, *av, &st, 0))
-          break;            
+          break;
       }
     }
   }
@@ -630,7 +632,7 @@ NAN_METHOD(GenericCompletion)
   bool exiting = (f4js_cmd.op == OP_DESTROY);
 
   ProcessReturnValue(args);
-  sem_post(f4js.psem);  
+  sem_post(f4js.psem);
   if (exiting) {
     pthread_join(f4js.fuse_thread, NULL);
     uv_unref((uv_handle_t*) &f4js.async);
@@ -694,11 +696,11 @@ static void DispatchOp(uv_async_t* handle, int status)
   std::string symName(fuseop_names[f4js_cmd.op]);
   f4js_cmd.retval = -EPERM;
   int argc = 0;
-  Handle<Value> argv[6]; 
-  Local<String> path = NanNew<String>(f4js_cmd.in_path); 
+  Handle<Value> argv[6];
+  Local<String> path = NanNew<String>(f4js_cmd.in_path);
   argv[argc++] = path;
   switch (f4js_cmd.op) {
-  
+
   case OP_INIT:
   case OP_DESTROY:
     f4js_cmd.retval = 0; // Will be used as the return value of OP_INIT.
@@ -708,6 +710,7 @@ static void DispatchOp(uv_async_t* handle, int status)
 
   case OP_TRUNCATE:
     argv[argc++] = NanNew((double)f4js_cmd.u.truncate.size);
+    argv[argc++] = NanNew(f4js.GenericFunc);
     break;
 
   case OP_GETATTR:
@@ -724,6 +727,7 @@ static void DispatchOp(uv_async_t* handle, int status)
 
   case OP_CHMOD:
     argv[argc++] = NanNew<Number>((double)f4js_cmd.u.chmod.mode);
+    argv[argc++] = NanNew(f4js.GenericFunc);
     break;
 
   case OP_SETXATTR:
@@ -742,7 +746,7 @@ static void DispatchOp(uv_async_t* handle, int status)
     --argc; // Ugly. Remove the first argument (path) because not needed.
     argv[argc++] = NanNew(f4js.StatfsFunc);
     break;
-  
+
   case OP_RENAME:
     argv[argc++] = NanNew<String>(f4js_cmd.u.rename.dst);
     argv[argc++] = NanNew(f4js.GenericFunc);
@@ -752,19 +756,19 @@ static void DispatchOp(uv_async_t* handle, int status)
     argv[argc++] = NanNew<Number>((double)f4js_cmd.info->flags);
     argv[argc++] = NanNew(f4js.OpenCreateFunc);
     break;
-    
+
   case OP_CREATE:
     argv[argc++] = NanNew<Number>((double)f4js_cmd.u.create_mkdir.mode);
     argv[argc++] = NanNew(f4js.OpenCreateFunc);
     break;
-  
+
   case OP_MKDIR:
-    argv[argc++] = NanNew<Number>((double)f4js_cmd.u.create_mkdir.mode);  
-    argv[argc++] = NanNew(f4js.GenericFunc);    
+    argv[argc++] = NanNew<Number>((double)f4js_cmd.u.create_mkdir.mode);
+    argv[argc++] = NanNew(f4js.GenericFunc);
     break;
-    
+
   case OP_READ:
-    argv[argc++] = NanNew<Number>((double)f4js_cmd.u.rw.offset);  
+    argv[argc++] = NanNew<Number>((double)f4js_cmd.u.rw.offset);
     argv[argc++] = NanNew<Number>((double)f4js_cmd.u.rw.len);
     NanAssignPersistent(f4js.nodeBuffer, NanNewBufferHandle(f4js_cmd.u.rw.len));
     argv[argc++] = NanNew(f4js.nodeBuffer);
@@ -772,26 +776,26 @@ static void DispatchOp(uv_async_t* handle, int status)
     argv[argc++] = NanNew(f4js.ReadFunc);
 
     break;
-    
+
   case OP_WRITE:
-    argv[argc++] = NanNew<Number>((double)f4js_cmd.u.rw.offset);  
+    argv[argc++] = NanNew<Number>((double)f4js_cmd.u.rw.offset);
     argv[argc++] = NanNew<Number>((double)f4js_cmd.u.rw.len);
     NanAssignPersistent(f4js.nodeBuffer, NanNewBufferHandle((char*)f4js_cmd.u.rw.srcBuf, f4js_cmd.u.rw.len));
     argv[argc++] = NanNew(f4js.nodeBuffer);
     argv[argc++] = NanNew<Number>((double)f4js_cmd.info->fh); // optional file handle returned by open()
     argv[argc++] = NanNew(f4js.WriteFunc);
     break;
-    
+
   case OP_RELEASE:
     argv[argc++] = NanNew<Number>((double)f4js_cmd.info->fh); // optional file handle returned by open()
     argv[argc++] = NanNew(f4js.GenericFunc);
     break;
-    
+
   default:
     argv[argc++] = NanNew(f4js.GenericFunc);
     break;
   }
-  
+
   Local<Function> handler = Local<Function>::Cast(
     NanNew(f4js.handlers)->Get(NanNew<String>(symName.c_str()))
   );
@@ -848,7 +852,7 @@ NAN_METHOD(Start)
       if (!arg->IsUndefined() && arg->IsString()) {
         Local<String> stringArg = Local<String>::Cast(arg);
 
-        char *handle = *NanAsciiString(stringArg);  
+        char *handle = *NanAsciiString(stringArg);
         argLen = std::strlen(handle)+1;
         argSize = argLen * sizeof(char);
         f4js.extraArgv[f4js.extraArgc] = (char*)malloc(argSize);
@@ -857,7 +861,7 @@ NAN_METHOD(Start)
       }
     }
   }
-  
+
   f4js.root = root;
   NanAssignPersistent( f4js.handlers, Local<Object>::Cast(args[1]) );
 
