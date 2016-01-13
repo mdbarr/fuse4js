@@ -445,6 +445,7 @@ NAN_METHOD(ProcessReturnValue)
     Local<Number> retval = Local<Number>::Cast(args[0]);
     f4js_cmd.retval = (int)retval->Value();
   }
+  NanReturnUndefined();
 }
 
 // ---------------------------------------------------------------------------
