@@ -741,6 +741,7 @@ static void DispatchOp(uv_async_t* handle, int status)
 #else
     argv[argc++] = NanNew<Number>((double)f4js_cmd.u.setxattr.flags);
 #endif
+    argv[argc++] = NanNew(f4js.GenericFunc);
     break;
 
   case OP_STATFS:
